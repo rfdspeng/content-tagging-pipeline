@@ -71,7 +71,7 @@ def build_indexing_pipeline(collection_name: str, file_extension: str=".pdf", em
 
     pipe.add_component("converter", PyPDFToDocument(extraction_mode="layout"))
     pipe.add_component("cleaner", DocumentCleaner())
-    pipe.add_component("splitter", DocumentSplitter(split_by="word", split_length=100, split_overlap=10, split_threshold=50))
+    pipe.add_component("splitter", DocumentSplitter(split_by="word", split_length=100, split_overlap=20, split_threshold=100))
     pipe.add_component("metadata_cleaner", MetadataCleaner())
     pipe.add_component("embedder", SentenceTransformersDocumentEmbedder())
     pipe.add_component("writer", DocumentWriter(document_store=document_store))
