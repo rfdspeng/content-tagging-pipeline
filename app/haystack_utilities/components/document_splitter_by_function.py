@@ -1,6 +1,6 @@
 from haystack import component, Document
 from haystack.components.preprocessors import DocumentSplitter
-from typing import List, Optional, Callable
+from typing import List, Callable
 
 @component
 class DocumentSplitterByFunction:
@@ -27,7 +27,7 @@ class DocumentSplitterByFunction:
                 assert len(split_overlap_ids) == len(split_docs)
                 
                 for idx, split_doc in enumerate(split_docs):
-                    split_doc.meta["_split_overlap"] = split_overlap_ids[idx]
+                    split_doc.meta["_split_overlap"] = [{"doc_id": id} for id in split_overlap_ids[idx]]
             
             split_documents += split_docs
 

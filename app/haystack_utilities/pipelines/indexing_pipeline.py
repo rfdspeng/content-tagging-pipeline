@@ -1,6 +1,7 @@
 from haystack_utilities.components import MetadataCleaner
+from haystack_utilities.components import DocumentSplitterByFunction
 from haystack_utilities.tools import MilvusContextManager
-from typing import List, Optional
+from typing import List, Callable, Any
 from pymilvus import MilvusClient, DataType
 from haystack import Pipeline
 from haystack.components.converters import PyPDFToDocument
@@ -9,8 +10,22 @@ from haystack.components.embedders import SentenceTransformersDocumentEmbedder
 from haystack.components.writers import DocumentWriter
 from haystack.utils import Secret
 from milvus_haystack import MilvusDocumentStore
+import nltk
 
-def build_indexing_pipeline(collection_name: str, file_extension: str=".pdf", embed_dim: int=768, max_content_len_chars: int=65535, drop_old: bool=False) -> Pipeline:
+def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, Any] | Callable[[str], List[str]], file_extension: str=".pdf", embed_dim: int=768, max_content_len_chars: int=65535, drop_old: bool=False) -> Pipeline:
+
+    if file_extension == ".pdf":
+        converter = PyPDFToDocument(extraction_mode="layout")
+        # converter = PyPDFToDocument()
+    else:
+        raise Exception(f"{file_extension} not supported in indexing pipeline.")
+    
+    if isinstance(splitting_options, dict):
+        splitter = DocumentSplitter(**splitting_options)
+    elif callable(splitting_options):
+        splitter = DocumentSplitterByFunction(splitting_options)
+    else:
+        raise Exception("splitting_options must be a dictionary or a callable.")
 
     # If drop_old, drop the old collection and create a new one.
     # It's best to use pymilvus to define the schema: MilvusDocumentStore.write_documents() will create a collection
@@ -64,14 +79,9 @@ def build_indexing_pipeline(collection_name: str, file_extension: str=".pdf", em
 
     pipe = Pipeline()
 
-    if file_extension == ".pdf":
-        converter = PyPDFToDocument(extraction_mode="layout")
-    else:
-        raise Exception(f"{file_extension} not supported in indexing pipeline.")
-
-    pipe.add_component("converter", PyPDFToDocument(extraction_mode="layout"))
+    pipe.add_component("converter", converter)
     pipe.add_component("cleaner", DocumentCleaner())
-    pipe.add_component("splitter", DocumentSplitter(split_by="word", split_length=100, split_overlap=20, split_threshold=100))
+    pipe.add_component("splitter", splitter)
     pipe.add_component("metadata_cleaner", MetadataCleaner())
     pipe.add_component("embedder", SentenceTransformersDocumentEmbedder())
     pipe.add_component("writer", DocumentWriter(document_store=document_store))
