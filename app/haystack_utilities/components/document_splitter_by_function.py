@@ -20,7 +20,10 @@ class DocumentSplitterByFunction:
             # Get split overlaps
             if self.split_overlap and len(ids) > 1:
                 if len(ids) > 1:
-                    split_overlap_ids = [[ids[1]]] + [[ids[idx-1], ids[idx+1]] for idx in range(1, len(ids)-1)] + [[ids[len(ids)-2]]]
+                    # split_overlap_ids = [[ids[1]]] + [[ids[idx-1], ids[idx+1]] for idx in range(1, len(ids)-1)] + [[ids[len(ids)-2]]]
+                    split_overlap_ids = [[ids[idx-1], ids[idx+1]] for idx in range(1, len(ids)-1)]
+                    split_overlap_ids.insert(0, [ids[1]])
+                    split_overlap_ids.extend([[ids[len(ids)-2]]])
                 else:
                     split_overlap_ids = [[]]
                 
