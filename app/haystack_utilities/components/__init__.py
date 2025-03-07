@@ -4,4 +4,4 @@ from haystack_utilities.components.milvus_query_retriever import MilvusQueryRetr
 from haystack_utilities.components.sync_llm_tagger import SyncLLMTagger
 from haystack_utilities.components.document_splitter_by_function import DocumentSplitterByFunction
 
-__all__ = ["DocumentUpserter", "MetadataCleaner", "MilvusQueryRetriever", "SyncLLMTagger", "DocumentSplitterByFunction"]
+# __all__ = ["DocumentUpserter", "MetadataCleaner", "MilvusQueryRetriever", "SyncLLMTagger", "DocumentSplitterByFunction"]

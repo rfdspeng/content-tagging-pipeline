@@ -1,26 +1,57 @@
 from typing import List
 from haystack import Document, component
+from copy import deepcopy
 
 @component
 class MetadataCleaner:
     @component.output_types(documents=List[Document])
     def run(self, documents: List[Document]):
-        docs = [self._add_metadata(doc) for doc in documents]
-        return {"documents": documents}
+        clean_docs = [self._clean_metadata(doc) for doc in documents]
+        return {"documents": clean_docs}
     
-    def _add_metadata(self, doc: Document) -> Document:
-        # Initialize the new metadata dictionary
-        doc.meta["metadata"] = {
+    def _clean_metadata(self, doc: Document) -> Document:
+        clean_doc = Document(
+            id=doc.id,
+            content=doc.content,
+            embedding=doc.embedding,
+            meta={"metadata": {}}
+        )
+
+        titles = ["title", "file_path"]
+        for title in titles:
+            if title in doc.meta.keys():
+                break
+
+        clean_doc.meta["metadata"] = {
             "tags": [],
-            "source_id": doc.meta.pop("source_id", None),
-            "file_path": doc.meta.pop("file_path", None),
-            "page_number": doc.meta.pop("page_number", None),
-            "split_overlap_ids": [d["doc_id"] for d in doc.meta.pop("_split_overlap", [])]
+            "source_id": doc.meta.get("source_id", None),
+            "title": doc.meta.get(title, None),
+            "page_number": doc.meta.get("page_number", None),
+            "split_overlap_ids": [d["doc_id"] for d in doc.meta.get("_split_overlap", [])]
         }
 
-        # Remove all keys except "metadata"
-        keys_to_remove = [key for key in list(doc.meta) if key != "metadata"]
-        for key in keys_to_remove:
-            doc.meta.pop(key)
+        return clean_doc
 
-        return doc
+# @component
+# class MetadataCleaner:
+#     @component.output_types(documents=List[Document])
+#     def run(self, documents: List[Document]):
+#         docs = [self._add_metadata(doc) for doc in documents]
+#         return {"documents": documents}
+    
+#     def _add_metadata(self, doc: Document) -> Document:
+#         # Initialize the new metadata dictionary
+#         doc.meta["metadata"] = {
+#             "tags": [],
+#             "source_id": doc.meta.pop("source_id", None),
+#             "file_path": doc.meta.pop("file_path", None),
+#             "page_number": doc.meta.pop("page_number", None),
+#             "split_overlap_ids": [d["doc_id"] for d in doc.meta.pop("_split_overlap", [])]
+#         }
+
+#         # Remove all keys except "metadata"
+#         keys_to_remove = [key for key in list(doc.meta) if key != "metadata"]
+#         for key in keys_to_remove:
+#             doc.meta.pop(key)
+
+#         return doc

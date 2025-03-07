@@ -5,14 +5,15 @@ from typing import List, Callable, Any
 from pymilvus import MilvusClient, DataType
 from haystack import Pipeline
 from haystack.components.converters import PyPDFToDocument
-from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter
+from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter, RecursiveDocumentSplitter
 from haystack.components.embedders import SentenceTransformersDocumentEmbedder
 from haystack.components.writers import DocumentWriter
 from haystack.utils import Secret
 from milvus_haystack import MilvusDocumentStore
 import nltk
+from copy import deepcopy
 
-def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, Any] | Callable[[str], List[str]], file_extension: str=".pdf", embed_dim: int=768, max_content_len_chars: int=65535, drop_old: bool=False) -> Pipeline:
+def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, Any] | Callable[[str], List[str]], file_extension: str=".pdf", embed_dim: int=768, max_content_len_chars: int=4096, drop_old: bool=False) -> Pipeline:
 
     if file_extension == ".pdf":
         converter = PyPDFToDocument(extraction_mode="layout")
@@ -20,12 +21,21 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
     else:
         raise Exception(f"{file_extension} not supported in indexing pipeline.")
     
-    if isinstance(splitting_options, dict):
+    # if isinstance(splitting_options, dict):
+    #     splitter = DocumentSplitter(**splitting_options)
+    # elif callable(splitting_options):
+    #     splitter = DocumentSplitterByFunction(splitting_options)
+    # else:
+    #     raise Exception("splitting_options must be a dictionary or a callable.")
+
+    splitting_options = deepcopy(splitting_options)
+    split_strategy = splitting_options.pop("split_strategy", None)
+    if split_strategy == "fixed":
         splitter = DocumentSplitter(**splitting_options)
-    elif callable(splitting_options):
-        splitter = DocumentSplitterByFunction(splitting_options)
+    elif split_strategy == "recursive":
+        splitter = RecursiveDocumentSplitter(**splitting_options)
     else:
-        raise Exception("splitting_options must be a dictionary or a callable.")
+        raise Exception("Valid split strategies are 'fixed' and 'recursive'.")
 
     # If drop_old, drop the old collection and create a new one.
     # It's best to use pymilvus to define the schema: MilvusDocumentStore.write_documents() will create a collection
@@ -56,7 +66,7 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
 
             index_params.add_index(
                 field_name="vector",
-                metric_type="COSINE",
+                metric_type="COSINE", # sentence-transformers/all-mpnet-base-v2 embeddings are L2-normalized
                 index_type="AUTOINDEX",
                 index_name="vector",
             )
@@ -83,7 +93,7 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
     pipe.add_component("cleaner", DocumentCleaner())
     pipe.add_component("splitter", splitter)
     pipe.add_component("metadata_cleaner", MetadataCleaner())
-    pipe.add_component("embedder", SentenceTransformersDocumentEmbedder())
+    pipe.add_component("embedder", SentenceTransformersDocumentEmbedder()) # Default: sentence-transformers/all-mpnet-base-v2
     pipe.add_component("writer", DocumentWriter(document_store=document_store))
 
     pipe.connect("converter", "cleaner")
