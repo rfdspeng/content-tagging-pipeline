@@ -4,7 +4,7 @@ from haystack_utilities.tools import MilvusContextManager
 from typing import List, Callable, Any
 from pymilvus import MilvusClient, DataType
 from haystack import Pipeline
-from haystack.components.converters import PyPDFToDocument, TextFileToDocument
+from haystack.components.converters import PyPDFToDocument, TextFileToDocument, PPTXToDocument
 from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter, RecursiveDocumentSplitter
 from haystack.components.embedders import SentenceTransformersDocumentEmbedder
 from haystack.components.writers import DocumentWriter
@@ -22,6 +22,8 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
         "TBD"
     elif file_extension == ".txt":
         converter = TextFileToDocument()
+    elif file_extension == ".pptx":
+        converter = PPTXToDocument()
     else:
         raise Exception(f"{file_extension} not supported in indexing pipeline.")
     
@@ -102,6 +104,7 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
 
     pipe.connect("converter", "cleaner")
     pipe.connect("cleaner", "splitter")
+    # pipe.connect("converter", "splitter")
     pipe.connect("splitter", "embedder")
     pipe.connect("embedder", "metadata_cleaner")
     pipe.connect("metadata_cleaner", "writer")
