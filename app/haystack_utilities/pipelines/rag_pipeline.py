@@ -31,8 +31,10 @@ def build_rag_pipeline(collection_name: str, prompt_template: str, top_k: int=10
     pipe.add_component("query_embedder", SentenceTransformersTextEmbedder()) # Default: sentence-transformers/all-mpnet-base-v2
     pipe.add_component("retriever", MilvusEmbeddingRetriever(document_store=document_store, top_k=top_k))
     pipe.add_component("prompt_builder", PromptBuilder(template=prompt_template))
-    pipe.add_component("generator", OpenAIGenerator(generation_kwargs={"temperature": 0.7, "max_tokens": 500})) # Update this
+    pipe.add_component("generator", OpenAIGenerator(generation_kwargs={"temperature": 0.7, "max_completion_tokens": 1000})) # Update this
 
     pipe.connect("query_embedder", "retriever")
     pipe.connect("retriever", "prompt_builder")
     pipe.connect("prompt_builder", "generator")
+
+    return pipe
