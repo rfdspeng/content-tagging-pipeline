@@ -1,9 +1,13 @@
 from typing import List
 from haystack import Document, component
-from copy import deepcopy
+# from copy import deepcopy
+import re
 
 @component
 class MetadataCleaner:
+    def __init__(self):
+        self.search_filetype = re.compile(r"\.[a-zA-Z0-9]+$")
+
     @component.output_types(documents=List[Document])
     def run(self, documents: List[Document]):
         clean_docs = [self._clean_metadata(doc) for doc in documents]
@@ -17,15 +21,14 @@ class MetadataCleaner:
             meta={"metadata": {}}
         )
 
-        titles = ["title", "file_path"]
-        for title in titles:
-            if title in doc.meta.keys():
-                break
+        title = doc.meta.get("title") or doc.meta.get("file_path")
+        file_type = self.search_filetype.search(title).group() if isinstance(title, str) else None
 
         clean_doc.meta["metadata"] = {
             "tags": [],
             "source_id": doc.meta.get("source_id", None),
-            "title": doc.meta.get(title, None),
+            "title": title,
+            "file_type": file_type,
             "page_number": doc.meta.get("page_number", None),
             "split_overlap_ids": [d["doc_id"] for d in doc.meta.get("_split_overlap", [])]
         }

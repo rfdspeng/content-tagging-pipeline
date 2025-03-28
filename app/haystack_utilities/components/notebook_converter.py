@@ -6,6 +6,7 @@ from haystack.dataclasses import ByteStream
 import json
 import re
 from bs4 import BeautifulSoup
+import html
 
 @component
 class JupyterNotebookConverter(TextFileToDocument):
@@ -45,8 +46,8 @@ class JupyterNotebookConverter(TextFileToDocument):
                 content = BeautifulSoup(content, "html.parser")
                 for match in content.find_all(["img"]):
                     match.decompose()
-                content = str(content)
-                composed_str = f"  \n{content}  \n"
+                    
+                composed_str = f"  \n{html.unescape(str(content))}  \n"
             else:
                 composed_str = f"  \n{content}  \n"
 

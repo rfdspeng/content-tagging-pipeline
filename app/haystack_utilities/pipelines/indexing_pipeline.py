@@ -1,5 +1,4 @@
-from haystack_utilities.components import MetadataCleaner
-from haystack_utilities.components import DocumentSplitterByFunction
+from haystack_utilities.components import MetadataCleaner, JupyterNotebookConverter
 from haystack_utilities.tools import MilvusContextManager
 from typing import List, Callable, Any
 from pymilvus import MilvusClient, DataType
@@ -24,6 +23,8 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
         converter = TextFileToDocument()
     elif file_extension == ".pptx":
         converter = PPTXToDocument()
+    elif file_extension == ".ipynb":
+        converter = JupyterNotebookConverter()
     else:
         raise Exception(f"{file_extension} not supported in indexing pipeline.")
     
