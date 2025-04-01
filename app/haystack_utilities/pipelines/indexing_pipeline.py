@@ -12,7 +12,7 @@ from milvus_haystack import MilvusDocumentStore
 import nltk
 from copy import deepcopy
 
-def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, Any] | Callable[[str], List[str]], file_extension: str=".pdf", embed_dim: int=768, max_content_len_chars: int=4096, drop_old: bool=False) -> Pipeline:
+def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, Any] | Callable[[str], List[str]], skip_cleaner: bool=True, file_extension: str=".pdf", embed_dim: int=768, max_content_len_chars: int=4096, drop_old: bool=False) -> Pipeline:
 
     if file_extension == ".pdf":
         converter = PyPDFToDocument(extraction_mode="layout")
@@ -97,15 +97,19 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
     pipe = Pipeline()
 
     pipe.add_component("converter", converter)
-    pipe.add_component("cleaner", DocumentCleaner())
+    if not skip_cleaner:
+        pipe.add_component("cleaner", DocumentCleaner())
     pipe.add_component("splitter", splitter)
     pipe.add_component("metadata_cleaner", MetadataCleaner())
     pipe.add_component("embedder", SentenceTransformersDocumentEmbedder()) # Default: sentence-transformers/all-mpnet-base-v2
     pipe.add_component("writer", DocumentWriter(document_store=document_store))
 
-    pipe.connect("converter", "cleaner")
-    pipe.connect("cleaner", "splitter")
-    # pipe.connect("converter", "splitter")
+    if not skip_cleaner:
+        pipe.connect("converter", "cleaner")
+        pipe.connect("cleaner", "splitter")
+    else:
+        pipe.connect("converter", "splitter")
+        
     pipe.connect("splitter", "embedder")
     pipe.connect("embedder", "metadata_cleaner")
     pipe.connect("metadata_cleaner", "writer")
