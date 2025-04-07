@@ -1,0 +1,1 @@
+from haystack_utilities.ml.tagging_prompts import tagging_prompt, tagging_prompt_ipynb

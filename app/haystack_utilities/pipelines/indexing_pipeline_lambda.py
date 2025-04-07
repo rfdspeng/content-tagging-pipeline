@@ -1,9 +1,10 @@
-from haystack_utilities.components import MetadataCleaner, JupyterNotebookConverter
+from haystack_utilities.components import MetadataCleaner, JupyterNotebookConverter, SyncLLMTagger
 from haystack_utilities.tools import MilvusContextManager
+from haystack_utilities.ml import tagging_prompt, tagging_prompt_ipynb
 from typing import List, Callable, Any
 from pymilvus import MilvusClient, DataType
 from haystack import Pipeline
-from haystack.components.routers import FileTypeRouter
+from haystack.components.routers import FileTypeRouter, MetadataRouter
 from haystack.components.converters import PyPDFToDocument, TextFileToDocument, PPTXToDocument, HTMLToDocument
 from haystack.components.joiners.document_joiner import DocumentJoiner
 from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter, RecursiveDocumentSplitter
@@ -71,7 +72,8 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
     Create the pipeline
 
     File type router -> document joiner -> converters -> cleaner (optional) -> 
-    Splitter -> SentenceTransformer embedder -> metadata cleaner (normalization) -> document writer (to vector store)
+    Splitter -> SentenceTransformer embedder -> metadata cleaner (normalization) -> 
+    Tagger (optional) -> document writer (to vector store)
 
     Cleaner is optional because it removes formatting, which is not desirable for human readability and may not be desirable for generation in RAG
     
@@ -99,7 +101,7 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
     pipe.add_component("pptx_converter", PPTXToDocument())
     pipe.add_component("ipynb_converter", JupyterNotebookConverter())
 
-    pipe.add_component("document_joiner", DocumentJoiner())
+    pipe.add_component("converter_document_joiner", DocumentJoiner())
 
     if not skip_cleaner:
         pipe.add_component("cleaner", DocumentCleaner())
@@ -131,12 +133,19 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
     pipe.add_component("metadata_cleaner", MetadataCleaner())
     pipe.add_component("embedder", SentenceTransformersDocumentEmbedder()) # Default: sentence-transformers/all-mpnet-base-v2
 
-    # if add_tagger:
-    #     # Update tagging pipeline code
-    #     # Router (by metadata) to correct prompt builder
-    #     # Join all prompt builders and pass to generator
-    #     # Pass generator output to tag averager
-    #     pipe.add_component()
+    if add_tagger:
+        # Jupyter notebooks will go to "ipynb_tagger" (metadata_router.ipynb)
+        # All others will go to "tagger" (metadata_router.unmatched)
+        rules = {
+            "ipynb": {"field": "meta.metadata.file_type", 
+                   "operator": "==",
+                   "value": ".ipynb"
+                   }
+        }
+        pipe.add_component("metadata_router", MetadataRouter(rules=rules))
+        pipe.add_component("tagger", SyncLLMTagger(tagging_prompt))
+        pipe.add_component("ipynb_tagger", SyncLLMTagger(tagging_prompt_ipynb))
+        pipe.add_component("tagger_document_joiner", DocumentJoiner())
 
     pipe.add_component("writer", DocumentWriter(document_store=document_store))
 
@@ -150,20 +159,30 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
     pipe.connect("file_type_router.application/x-ipynb\\+json", "ipynb_converter")
 
     # Joining converter outputs
-    pipe.connect("txt_converter", "document_joiner")
-    pipe.connect("pdf_converter", "document_joiner")
-    pipe.connect("pptx_converter", "document_joiner")
-    pipe.connect("ipynb_converter", "document_joiner")
+    pipe.connect("txt_converter", "converter_document_joiner")
+    pipe.connect("pdf_converter", "converter_document_joiner")
+    pipe.connect("pptx_converter", "converter_document_joiner")
+    pipe.connect("ipynb_converter", "converter_document_joiner")
 
-    # The rest
+    # Cleaner (optional), splitter, embedder, normalize metadata
     if not skip_cleaner:
-        pipe.connect("document_joiner", "cleaner")
+        pipe.connect("converter_document_joiner", "cleaner")
         pipe.connect("cleaner", "splitter")
     else:
-        pipe.connect("document_joiner", "splitter")
+        pipe.connect("converter_document_joiner", "splitter")
         
     pipe.connect("splitter", "embedder")
     pipe.connect("embedder", "metadata_cleaner")
-    pipe.connect("metadata_cleaner", "writer")
+
+    # Tagger
+    if add_tagger:
+        pipe.connect("metadata_cleaner", "metadata_router")
+        pipe.connect("metadata_router.ipynb", "ipynb_tagger")
+        pipe.connect("metadata_router.unmatched", "tagger")
+        pipe.connect("ipynb_tagger", "tagger_document_joiner")
+        pipe.connect("tagger", "tagger_document_joiner")
+        pipe.connect("tagger_document_joiner", "writer")
+    else:
+        pipe.connect("metadata_cleaner", "writer")
 
     return pipe
