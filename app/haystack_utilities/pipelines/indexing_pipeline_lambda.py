@@ -1,5 +1,5 @@
 from haystack_utilities.components import MetadataCleaner, JupyterNotebookConverter, SyncLLMTagger
-from haystack_utilities.tools import MilvusContextManager
+import haystack_utilities.tools
 from haystack_utilities.ml import tagging_prompt, tagging_prompt_ipynb
 from typing import List, Callable, Any
 from pymilvus import MilvusClient, DataType
@@ -23,7 +23,7 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
     # This is a waste of space because we're using SHA-256 to generate the IDs (haystack.Document._create_id()).
     # These are 64-character IDs.
     if drop_old:
-        with MilvusContextManager() as client:
+        with haystack_utilities.tools.MilvusContextManager() as client:
             if collection_name in client.list_collections():
                 client.drop_collection(collection_name)
 
@@ -88,13 +88,10 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
     # mime_types are compiled into regular expression objects. mime_types map to file extensions.
     # Each file name passed to router is mapped to a mime type
     # The mime type of the file is matched (re.fullmatch) against mime_types, starting from the beginning of the list (which means the list order matters)
-    mime_types = ["application/pdf", r"text/.*", "application/vnd.openxmlformats-officedocument.presentationml.presentation", r"application/x-ipynb\+json"]
-    additional_mimetypes = {
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
-        "application/x-ipynb+json": ".ipynb"
-        }
     # The output of the router is a dictionary of lists. Each key is a mime type and each value is a list of file names corresponding to the mime type.
-    pipe.add_component("file_type_router", FileTypeRouter(mime_types=mime_types, additional_mimetypes=additional_mimetypes))
+    pipe.add_component("file_type_router", FileTypeRouter(mime_types=haystack_utilities.tools.mime_types, 
+                                                          additional_mimetypes=haystack_utilities.tools.additional_mimetypes)
+                                                          )
 
     pipe.add_component("txt_converter", TextFileToDocument()) # For now, .txt, .md, .html, and .vtt will be routed to here
     pipe.add_component("pdf_converter", PyPDFToDocument(extraction_mode="layout"))
