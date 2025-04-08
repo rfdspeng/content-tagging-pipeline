@@ -1,0 +1,4 @@
+Tag:             DA          DE          DS       InfraOps      MLE       AvgMicro    AvgMacro  
+Recall:        0.877       0.784        0.93        1.0        0.943       0.916       0.907    
+Precision:     0.711       0.283        1.0        0.276       0.852        0.75       0.624    
+F1:            0.785       0.416       0.964       0.432       0.895       0.825       0.698    
