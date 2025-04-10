@@ -54,11 +54,6 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
             if collection_name in client.list_collections():
                 client.drop_collection(collection_name)
 
-            client = MilvusClient(
-                uri=Secret.from_env_var("ZILLIZ_CLUSTER_ENDPOINT").resolve_value(),
-                token=Secret.from_env_var("ZILLIZ_CLUSTER_TOKEN").resolve_value(),
-            )
-
             schema = MilvusClient.create_schema(
                 auto_id=False,
                 enable_dynamic_field=True,

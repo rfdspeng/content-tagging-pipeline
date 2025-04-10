@@ -15,49 +15,9 @@ from milvus_haystack import MilvusDocumentStore
 import nltk
 from copy import deepcopy
 
-def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, Any] | Callable[[str], List[str]], skip_cleaner: bool=True, add_tagger: bool=False, embed_dim: int=768, max_content_len_chars: int=4096, drop_old: bool=False) -> Pipeline:
-
-    # If drop_old, drop the old collection and create a new one.
-    # It's best to use pymilvus to define the schema: MilvusDocumentStore.write_documents() will create a collection
-    # and schema based on the documents, but it sets the primary key field to VARCHAR of length 65535 by default.
-    # This is a waste of space because we're using SHA-256 to generate the IDs (haystack.Document._create_id()).
-    # These are 64-character IDs.
-    if drop_old:
-        with haystack_utilities.tools.MilvusContextManager() as client:
-            if collection_name in client.list_collections():
-                client.drop_collection(collection_name)
-
-            client = MilvusClient(
-                uri=Secret.from_env_var("ZILLIZ_CLUSTER_ENDPOINT").resolve_value(),
-                token=Secret.from_env_var("ZILLIZ_CLUSTER_TOKEN").resolve_value(),
-            )
-
-            schema = MilvusClient.create_schema(
-                auto_id=False,
-                enable_dynamic_field=True,
-            )
-
-            schema.add_field(field_name="id", datatype=DataType.VARCHAR, is_primary=True, auto_id=False, max_length=64) # SHA-256
-            schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=embed_dim)
-            schema.add_field(field_name="text", datatype=DataType.VARCHAR, max_length=max_content_len_chars)
-            schema.add_field(field_name="metadata", datatype=DataType.JSON)
-
-            index_params = client.prepare_index_params()
-
-            index_params.add_index(
-                field_name="vector",
-                metric_type="COSINE", # sentence-transformers/all-mpnet-base-v2 embeddings are L2-normalized
-                index_type="AUTOINDEX",
-                index_name="vector",
-            )
-            
-            client.create_collection(
-                collection_name=collection_name,
-                schema=schema,
-                index_params=index_params,
-                consistency_level="Strong",
-            )
-
+def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, Any] | Callable[[str], List[str]], skip_cleaner: bool=True, add_tagger: bool=False) -> Pipeline:
+    # This function assumes the collection has already been created
+    
     document_store = MilvusDocumentStore(
         collection_name=collection_name,
         connection_args={
