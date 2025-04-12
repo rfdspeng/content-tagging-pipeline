@@ -9,7 +9,7 @@ import json
 class SyncLLMTagger:
     def __init__(self, prompt_template: str, temperature: float=0, max_tokens: int=30, tag_threshold: float=0.3):
         pipe = Pipeline()
-        pipe.add_component("prompt_builder", PromptBuilder(template=prompt_template))
+        pipe.add_component("prompt_builder", PromptBuilder(template=prompt_template, required_variables="*"))
         pipe.add_component("generator", OpenAIGenerator(generation_kwargs={"temperature": temperature, "max_tokens": max_tokens}))
         pipe.connect("prompt_builder", "generator")
         self.tag_pipe = pipe

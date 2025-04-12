@@ -9,6 +9,7 @@ from pathlib import Path
 from haystack.components.routers import FileTypeRouter
 from haystack_utilities.pipelines import indexing_pipeline_lambda
 import haystack_utilities.tools
+import nltk
 
 # Function to load/check environment variables
 def load_env_vars():
@@ -25,6 +26,12 @@ def load_env_vars():
 
     if not(collection_name := os.environ.get("COLLECTION_NAME")):
         raise Exception("Please provide a str COLLECTION_NAME environment variable. This is the name of your Zilliz collection.")
+    
+    if not(haystack_telemetry_enabled := os.environ.get("HAYSTACK_TELEMETRY_ENABLED")):
+        raise Exception("Please set HAYSTACK_TELEMETRY_ENABLED environment variable to False.")
+    
+    if haystack_telemetry_enabled.lower() in ("true", "1"):
+        raise Exception("Please set HAYSTACK_TELEMETRY_ENABLED environment variable to False.")
 
     splitting_options = os.environ.get("SPLITTING_OPTIONS", None)
     if not splitting_options:
@@ -66,6 +73,7 @@ env_vars = load_env_vars() # Load env vars
 haystack_utilities.tools.create_collection(env_vars["collection_name"], max_content_len_chars=env_vars["max_content_len_chars"]) # Create collection if it doesn't exist
 file_type_router = FileTypeRouter(mime_types=haystack_utilities.tools.mime_types, additional_mimetypes=haystack_utilities.tools.additional_mimetypes) # For early termination if unsupported file type
 s3 = boto3.resource("s3") # Can this connection be purged?
+nltk.data.path.append("/var/task/nltk_data") # Downloaded during Docker image creation
 
 print("Loading function.")
 def lambda_handler(event, context):
@@ -86,7 +94,7 @@ def lambda_handler(event, context):
         file_name = Path(f"/tmp/{uuid.uuid4()}/{Path(key).name}")
         file_name.parent.mkdir()
         bucket.download_file(key, file_name)
-        print(f"Downloaded object {key} from bucket {bucket_name}.")
+        print(f"Downloaded object {key} from bucket {bucket_name} into {file_name.as_posix()}.")
     except Exception as e:
         print(f"Error getting object {key} from bucket {bucket_name}. Make sure they exist and your bucket is in the same region as this function.")
         raise e
@@ -115,6 +123,7 @@ def lambda_handler(event, context):
     try:
         file_name.unlink()
         file_name.parent.rmdir()
+        print(f"Deleted {file_name.as_posix()}.")
     except Exception as e:
         print(e)
         print(f"Error deleting directory and file {file_name.as_posix()}")
