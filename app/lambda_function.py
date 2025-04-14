@@ -10,6 +10,7 @@ from haystack.components.routers import FileTypeRouter
 from haystack_utilities.pipelines import indexing_pipeline_lambda
 import haystack_utilities.tools
 import nltk
+from sentence_transformers import SentenceTransformer
 
 # Function to load/check environment variables
 def load_env_vars():
@@ -27,11 +28,11 @@ def load_env_vars():
     if not(collection_name := os.environ.get("COLLECTION_NAME")):
         raise Exception("Please provide a str COLLECTION_NAME environment variable. This is the name of your Zilliz collection.")
     
-    if not(haystack_telemetry_enabled := os.environ.get("HAYSTACK_TELEMETRY_ENABLED")):
-        raise Exception("Please set HAYSTACK_TELEMETRY_ENABLED environment variable to False.")
+    # if not(haystack_telemetry_enabled := os.environ.get("HAYSTACK_TELEMETRY_ENABLED")):
+    #     raise Exception("Please set HAYSTACK_TELEMETRY_ENABLED environment variable to False.")
     
-    if haystack_telemetry_enabled.lower() in ("true", "1"):
-        raise Exception("Please set HAYSTACK_TELEMETRY_ENABLED environment variable to False.")
+    # if haystack_telemetry_enabled.lower() in ("true", "1"):
+    #     raise Exception("Please set HAYSTACK_TELEMETRY_ENABLED environment variable to False.")
 
     splitting_options = os.environ.get("SPLITTING_OPTIONS", None)
     if not splitting_options:
@@ -69,7 +70,10 @@ def load_env_vars():
 
 
 # Set up the environment
+os.environ["HAYSTACK_TELEMETRY_ENABLED"] = "False"
+os.environ["SENTENCE_TRANSFORMERS_HOME"] = "/tmp/" # Cache directory
 env_vars = load_env_vars() # Load env vars
+SentenceTransformer("sentence-transformers/all-mpnet-base-v2") # Cache embedding model
 haystack_utilities.tools.create_collection(env_vars["collection_name"], max_content_len_chars=env_vars["max_content_len_chars"]) # Create collection if it doesn't exist
 file_type_router = FileTypeRouter(mime_types=haystack_utilities.tools.mime_types, additional_mimetypes=haystack_utilities.tools.additional_mimetypes) # For early termination if unsupported file type
 s3 = boto3.resource("s3") # Can this connection be purged?
