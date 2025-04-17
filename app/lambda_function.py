@@ -27,12 +27,6 @@ def load_env_vars():
 
     if not(collection_name := os.environ.get("COLLECTION_NAME")):
         raise Exception("Please provide a str COLLECTION_NAME environment variable. This is the name of your Zilliz collection.")
-    
-    # if not(haystack_telemetry_enabled := os.environ.get("HAYSTACK_TELEMETRY_ENABLED")):
-    #     raise Exception("Please set HAYSTACK_TELEMETRY_ENABLED environment variable to False.")
-    
-    # if haystack_telemetry_enabled.lower() in ("true", "1"):
-    #     raise Exception("Please set HAYSTACK_TELEMETRY_ENABLED environment variable to False.")
 
     splitting_options = os.environ.get("SPLITTING_OPTIONS", None)
     if not splitting_options:
@@ -51,30 +45,49 @@ def load_env_vars():
         try:
             splitting_options = json.loads(splitting_options)
         except json.JSONDecodeError as e:
-            raise Exception("Please provide SPLITTING_OPTIONS environment variable in valid JSON format. This defines the chunking strategy.")
+            print("Please provide SPLITTING_OPTIONS environment variable in valid JSON format. This defines the chunking strategy.")
+            raise e
 
     skip_cleaner = os.environ.get("SKIP_CLEANER", "True").lower() == "true"
     add_tagger = os.environ.get("ADD_TAGGER", "True").lower() == "true"
-    max_content_len_chars = int(os.environ.get("MAX_CHUNK_LENGTH_IN_CHARS", 65535))
 
-    return {
+    tagging_kwargs = {
+        "model": os.environ.get("TAGGING_MODEL", "gpt-4o-mini"),
+        "temperature": float(os.environ.get("TAGGING_TEMPERATURE", 0)),
+        "max_completion_tokens": int(os.environ.get("TAGGING_MAX_TOKENS", 30)),
+        "tag_threshold": float(os.environ.get("TAG_THRESHOLD", 0.3)),
+        "untagged_option": os.environ.get("UNTAGGED_OPTION", "keep"),
+    }
+    try:
+        tagging_kwargs = haystack_utilities.tools.TaggingKwargs(**tagging_kwargs).model_dump()
+    except Exception as e:
+        raise e
+    
+    try:
+        max_content_len_chars = int(os.environ.get("MAX_CHUNK_LENGTH_IN_CHARS", 65535))
+    except Exception as e:
+        print("MAX_CHUNK_LENGTH_IN_CHARS must be a positive integer.")
+        raise e
+
+    env_vars = {
         "collection_name": collection_name,
         "splitting_options": splitting_options,
         "skip_cleaner": skip_cleaner,
         "add_tagger": add_tagger,
         "max_content_len_chars": max_content_len_chars,
+        "tagging_kwargs": tagging_kwargs,
     }
 
-
+    print(f"Loaded environment variables: {env_vars}")
+    return env_vars
 
 
 
 # Set up the environment
-os.environ["HAYSTACK_TELEMETRY_ENABLED"] = "False"
 os.environ["SENTENCE_TRANSFORMERS_HOME"] = "/tmp/" # Cache directory
 env_vars = load_env_vars() # Load env vars
 SentenceTransformer("sentence-transformers/all-mpnet-base-v2") # Cache embedding model
-haystack_utilities.tools.create_collection(env_vars["collection_name"], max_content_len_chars=env_vars["max_content_len_chars"]) # Create collection if it doesn't exist
+haystack_utilities.tools.create_collection(env_vars["collection_name"], max_content_len_chars=env_vars["max_content_len_chars"]) # Create collection if it doesn't exist (this is idempotent code)
 file_type_router = FileTypeRouter(mime_types=haystack_utilities.tools.mime_types, additional_mimetypes=haystack_utilities.tools.additional_mimetypes) # For early termination if unsupported file type
 s3 = boto3.resource("s3") # Can this connection be purged?
 nltk.data.path.append("/var/task/nltk_data") # Downloaded during Docker image creation
@@ -109,7 +122,8 @@ def lambda_handler(event, context):
         index_pipe = indexing_pipeline_lambda.build_indexing_pipeline(env_vars["collection_name"], 
                                                               env_vars["splitting_options"], 
                                                               skip_cleaner=env_vars["skip_cleaner"], 
-                                                              add_tagger=env_vars["add_tagger"])
+                                                              add_tagger=env_vars["add_tagger"],
+                                                              tagging_kwargs=env_vars["tagging_kwargs"])
         print("Created indexing pipeline.")
     except Exception as e:
         print(f"Failed to create indexing pipeline.")

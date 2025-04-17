@@ -1,19 +1,24 @@
-from typing import List
+from typing import List, Any
 from haystack import Pipeline, Document, component
 from haystack.components.builders import PromptBuilder
 from haystack.components.generators import OpenAIGenerator
 import json
+from haystack_utilities.tools import TaggingKwargs
 
 # Multi-label tagging
 @component
 class SyncLLMTagger:
-    def __init__(self, prompt_template: str, temperature: float=0, max_tokens: int=30, tag_threshold: float=0.3):
+
+    def __init__(self, prompt_template: str, tagging_kwargs: dict[str, Any]={}):
+        tagging_kwargs = TaggingKwargs(**tagging_kwargs)
+
         pipe = Pipeline()
         pipe.add_component("prompt_builder", PromptBuilder(template=prompt_template, required_variables="*"))
-        pipe.add_component("generator", OpenAIGenerator(generation_kwargs={"temperature": temperature, "max_tokens": max_tokens}))
+        pipe.add_component("generator", OpenAIGenerator(model=tagging_kwargs.model, generation_kwargs={"temperature": tagging_kwargs.temperature, "max_completion_tokens": tagging_kwargs.max_completion_tokens}))
         pipe.connect("prompt_builder", "generator")
         self.tag_pipe = pipe
-        self.tag_threshold = tag_threshold
+        self.tag_threshold = tagging_kwargs.tag_threshold
+        self.untagged_option = tagging_kwargs.untagged_option.value
     
     @component.output_types(documents=List[Document])
     def run(self, documents: List[Document]):
@@ -36,11 +41,15 @@ class SyncLLMTagger:
                 }
 
             tags = self.tag_pipe.run({"prompt_builder": {"doc": doc}})
-            # doc.meta["metadata"]["tags"] = json.loads(tags["generator"]["replies"][0])
-            tags = json.loads(tags["generator"]["replies"][0])
+
+            try:
+                tags = json.loads(tags["generator"]["replies"][0])
+            except json.JSONDecodeError as e:
+                print(f"Tagger output should be in JSON format but is instead {tags["generator"]["replies"][0]}.")
+                raise e
 
             if not isinstance(tags, list):
-                raise Exception(f"SyncLLMTagger.run(): Expected tags to be list, but got {type(tags)}")
+                raise Exception(f"SyncLLMTagger.run(): Expected tags to be list, but got {type(tags)}.")
             elif tags == []:
                 doc_dict[source_id]["untagged_docs"].append(doc)
             else:
@@ -54,18 +63,16 @@ class SyncLLMTagger:
                 keep_tags = [tag for tag, count in doc_dict[source_id]["tags"].items() if count/total >= self.tag_threshold]
                 for doc in doc_dict[source_id]["tagged_docs"]:
                     doc.meta["metadata"]["tags"] = keep_tags
+                
+                if self.untagged_option == "tag":
+                    for doc in doc_dict[source_id]["untagged_docs"]:
+                        doc.meta["metadata"]["tags"] = keep_tags
         
-        # for doc in documents:
-        #     tags = self.tag_pipe.run({"prompt_builder": {"doc": doc}})
-        #     try:
-        #         tags = json.loads(tags["generator"]["replies"][0])
-        #     except json.JSONDecodeError as e:
-        #         raise Exception(f"Invalid JSON syntax: LLM returned {tags["generator"]["replies"][0]}")
-        #         # print(f"Invalid JSON syntax: {e}")
+        if self.untagged_option == "discard":
+            documents = []
+            for source_id in doc_dict:
+                documents.extend(doc_dict[source_id]["tagged_docs"])
 
-        #     doc.meta["metadata"]["tags"] = tags
-
-        # No need to construct list from doc_dict since the documents are objects anyway
         return {"documents": documents}
     
 

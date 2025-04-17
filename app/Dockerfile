@@ -17,4 +17,6 @@ RUN python -m nltk.downloader -d ./nltk_data punkt_tab \
 COPY haystack_utilities ./haystack_utilities
 COPY lambda_function.py .
 
+ENV HAYSTACK_TELEMETRY_ENABLED=False
+
 CMD [ "lambda_function.lambda_handler" ]

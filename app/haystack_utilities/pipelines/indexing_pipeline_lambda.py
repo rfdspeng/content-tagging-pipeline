@@ -15,7 +15,7 @@ from milvus_haystack import MilvusDocumentStore
 import nltk
 from copy import deepcopy
 
-def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, Any] | Callable[[str], List[str]], skip_cleaner: bool=True, add_tagger: bool=False) -> Pipeline:
+def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, Any] | Callable[[str], List[str]], skip_cleaner: bool=True, add_tagger: bool=False, tagging_kwargs: dict[str, Any]={}) -> Pipeline:
     # This function assumes the collection has already been created
     
     document_store = MilvusDocumentStore(
@@ -98,10 +98,11 @@ def build_indexing_pipeline(collection_name: str, splitting_options: dict[str, A
                    "operator": "==",
                    "value": ".ipynb"
                    }
-        }
+        }   
+
         pipe.add_component("metadata_router", MetadataRouter(rules=rules))
-        pipe.add_component("tagger", SyncLLMTagger(tagging_prompt))
-        pipe.add_component("ipynb_tagger", SyncLLMTagger(tagging_prompt_ipynb))
+        pipe.add_component("tagger", SyncLLMTagger(tagging_prompt, tagging_kwargs=tagging_kwargs))
+        pipe.add_component("ipynb_tagger", SyncLLMTagger(tagging_prompt_ipynb, tagging_kwargs=tagging_kwargs))
         pipe.add_component("tagger_document_joiner", DocumentJoiner())
 
     pipe.add_component("writer", DocumentWriter(document_store=document_store))
