@@ -8,7 +8,7 @@ import boto3
 from pathlib import Path
 from haystack.components.routers import FileTypeRouter
 from haystack_utilities.pipelines import indexing_pipeline_lambda
-import haystack_utilities.tools
+from haystack_utilities.tools import create_collection, TaggingKwargs, mime_types, additional_mimetypes, DeduplicateOption
 import nltk
 from sentence_transformers import SentenceTransformer
 
@@ -27,6 +27,12 @@ def load_env_vars():
 
     if not(collection_name := os.environ.get("COLLECTION_NAME")):
         raise Exception("Please provide a str COLLECTION_NAME environment variable. This is the name of your Zilliz collection.")
+
+    try:
+        max_content_len_chars = int(os.environ.get("MAX_CHUNK_LENGTH_IN_CHARS", 65535))
+    except Exception as e:
+        print("MAX_CHUNK_LENGTH_IN_CHARS must be a positive integer.")
+        raise e
 
     splitting_options = os.environ.get("SPLITTING_OPTIONS", None)
     if not splitting_options:
@@ -58,16 +64,9 @@ def load_env_vars():
         "tag_threshold": float(os.environ.get("TAG_THRESHOLD", 0.3)),
         "untagged_option": os.environ.get("UNTAGGED_OPTION", "keep"),
     }
-    try:
-        tagging_kwargs = haystack_utilities.tools.TaggingKwargs(**tagging_kwargs).model_dump()
-    except Exception as e:
-        raise e
+    tagging_kwargs = TaggingKwargs(**tagging_kwargs)
     
-    try:
-        max_content_len_chars = int(os.environ.get("MAX_CHUNK_LENGTH_IN_CHARS", 65535))
-    except Exception as e:
-        print("MAX_CHUNK_LENGTH_IN_CHARS must be a positive integer.")
-        raise e
+    deduplicate_option = DeduplicateOption(deduplicate_option=os.environ.get("DEDUPLICATE_OPTION", "delete"))
 
     env_vars = {
         "collection_name": collection_name,
@@ -76,6 +75,7 @@ def load_env_vars():
         "add_tagger": add_tagger,
         "max_content_len_chars": max_content_len_chars,
         "tagging_kwargs": tagging_kwargs,
+        "deduplicate_option": deduplicate_option,
     }
 
     print(f"Loaded environment variables: {env_vars}")
@@ -87,8 +87,8 @@ def load_env_vars():
 os.environ["SENTENCE_TRANSFORMERS_HOME"] = "/tmp/" # Cache directory
 env_vars = load_env_vars() # Load env vars
 SentenceTransformer("sentence-transformers/all-mpnet-base-v2") # Cache embedding model
-haystack_utilities.tools.create_collection(env_vars["collection_name"], max_content_len_chars=env_vars["max_content_len_chars"]) # Create collection if it doesn't exist (this is idempotent code)
-file_type_router = FileTypeRouter(mime_types=haystack_utilities.tools.mime_types, additional_mimetypes=haystack_utilities.tools.additional_mimetypes) # For early termination if unsupported file type
+create_collection(env_vars["collection_name"], max_content_len_chars=env_vars["max_content_len_chars"]) # Create collection if it doesn't exist (this is idempotent code)
+file_type_router = FileTypeRouter(mime_types=mime_types, additional_mimetypes=additional_mimetypes) # For early termination if unsupported file type
 s3 = boto3.resource("s3") # Can this connection be purged?
 nltk.data.path.append("/var/task/nltk_data") # Downloaded during Docker image creation
 
@@ -103,7 +103,7 @@ def lambda_handler(event, context):
     
     # Check that key is a valid file type
     if "unclassified" in file_type_router.run(sources=[Path(key)]).keys():
-        raise Exception(f"{key} is not a supported MIME type. Supported MIME types are {haystack_utilities.tools.mime_types}")
+        raise Exception(f"{key} is not a supported MIME type. Supported MIME types are {mime_types}")
     
     # Download the file
     bucket = s3.Bucket(bucket_name)
@@ -123,7 +123,8 @@ def lambda_handler(event, context):
                                                               env_vars["splitting_options"], 
                                                               skip_cleaner=env_vars["skip_cleaner"], 
                                                               add_tagger=env_vars["add_tagger"],
-                                                              tagging_kwargs=env_vars["tagging_kwargs"])
+                                                              tagging_kwargs=env_vars["tagging_kwargs"],
+                                                              deduplicate_option=env_vars["deduplicate_option"])
         print("Created indexing pipeline.")
     except Exception as e:
         print(f"Failed to create indexing pipeline.")

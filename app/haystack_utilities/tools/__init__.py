@@ -1,5 +1,5 @@
 from haystack_utilities.tools.milvus_utils import MilvusContextManager, create_collection
 from haystack_utilities.tools.haystack_utils import mime_types, additional_mimetypes
-from haystack_utilities.tools.validation import TaggingKwargs
+from haystack_utilities.tools.validation import TaggingKwargs, UntaggedOption, DeduplicateEnum, DeduplicateOption
 
 # __all__ = ["MilvusContextManager"]

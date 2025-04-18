@@ -3,22 +3,20 @@ from haystack import Pipeline, Document, component
 from haystack.components.builders import PromptBuilder
 from haystack.components.generators import OpenAIGenerator
 import json
-from haystack_utilities.tools import TaggingKwargs
+from haystack_utilities.tools import TaggingKwargs, UntaggedOption
 
 # Multi-label tagging
 @component
 class SyncLLMTagger:
 
-    def __init__(self, prompt_template: str, tagging_kwargs: dict[str, Any]={}):
-        tagging_kwargs = TaggingKwargs(**tagging_kwargs)
-
+    def __init__(self, prompt_template: str, tagging_kwargs: TaggingKwargs=TaggingKwargs()):
         pipe = Pipeline()
         pipe.add_component("prompt_builder", PromptBuilder(template=prompt_template, required_variables="*"))
         pipe.add_component("generator", OpenAIGenerator(model=tagging_kwargs.model, generation_kwargs={"temperature": tagging_kwargs.temperature, "max_completion_tokens": tagging_kwargs.max_completion_tokens}))
         pipe.connect("prompt_builder", "generator")
         self.tag_pipe = pipe
         self.tag_threshold = tagging_kwargs.tag_threshold
-        self.untagged_option = tagging_kwargs.untagged_option.value
+        self.untagged_option = tagging_kwargs.untagged_option
     
     @component.output_types(documents=List[Document])
     def run(self, documents: List[Document]):
@@ -64,11 +62,11 @@ class SyncLLMTagger:
                 for doc in doc_dict[source_id]["tagged_docs"]:
                     doc.meta["metadata"]["tags"] = keep_tags
                 
-                if self.untagged_option == "tag":
+                if self.untagged_option == UntaggedOption.TAG:
                     for doc in doc_dict[source_id]["untagged_docs"]:
                         doc.meta["metadata"]["tags"] = keep_tags
         
-        if self.untagged_option == "discard":
+        if self.untagged_option == UntaggedOption.DISCARD:
             documents = []
             for source_id in doc_dict:
                 documents.extend(doc_dict[source_id]["tagged_docs"])
