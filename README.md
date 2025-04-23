@@ -1,23 +1,14 @@
 # <u>Future work</u>
 
-Jupyter notebooks and powerpoints are the main file types tested. Converting and tagging PDF, HTML, Markdown need to be tested.
+1. Jupyter notebooks and powerpoints are the main file types tested. Converting and tagging PDF, HTML, Markdown need to be tested.
+2. The prompt includes "Business intelligence and Excel tutorials: ["Data Analysis"]". I would recommend removing "Excel tutorials" and avoid anything like this, e.g. "Pandas tutorials", "SQL tutorials". It causes the LLM to sometimes hallucinate the tag as "X tutorial".
+3. In `lambda_function.py`, the pipeline is instantiated in `lambda_handler` to ensure that the OpenAI and Zilliz client connections are active for each invocation. Another option is to instantiate the pipeline outside of `lambda_handler` and use a keep-alive directive to keep the connections active. See [Lambda best practices](https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html).
+4. The `DuplicateChecker` component checks for duplicate IDs before inserting into the vector database. There may be a race condition, however, if the same file is simultaneously uploaded multiple times and processed by the pipeline. One option is to create a new component that calls Milvus's `upsert` method, which checks for duplicate IDs. If this is atomic, then it solves the race condition. Another option is to use a cache layer or lock to ensure atomic insertion.
+5. There seems to be some run-to-run variation in the tagging through Lambda that should be investigated. Temperature is 0.
 
-Remove "Excel tutorial" from prompt. Tends to lead to hallucinations.
-
-keep-alive directive
-
-Instead of DuplicateChecker, use a new component that calls Milvus's `upsert` method (is this atomic?) or use a cache layer/lock to ensure atomic insertion.
-
-There seems to be some run-to-run variation in the tagging through Lambda, but I don't know why. Temperature is 0.
-
-
-## Warning message: No abbreviations file found for en. Using default abbreviations.
-
-When you run the pipeline, it checks whether it needs to "warm up" any of the components (components that need to warm up will have a `warm_up` method). This warning comes from warming up `DocumentSplitter` when `DocumentSplitter._use_sentence_splitter` is `True`: `DocumentSplitter.warm_up` -> `SentenceSplitter.__init__` -> `SentenceSplitter._read_abbreviations` -> checks if `site-packages/haystack/data/abbreviations/en.txt` exists (which it doesn't). It looks like this file can be used to specify additional abbreviations on top of the default abbreviations in the sentence tokenizer (see `SentenceSplitter.sentence_tokenizer._params.abbrev_types`).
-
-## Warning message: Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
-
-This message appears if `huggingface-hub`'s version is >= 0.30.0. Adding `hf-xet` to `requirements.txt` causes the Lambda function to fail. See https://huggingface.co/docs/hub/en/storage-backends.
+There are a couple of warning messages that are not important.
+1. **No abbreviations file found for en. Using default abbreviations.** When you run the pipeline, it checks whether it needs to "warm up" any of the components (components that need to warm up will have a `warm_up` method). This warning comes from warming up `DocumentSplitter` when `DocumentSplitter._use_sentence_splitter` is `True`: `DocumentSplitter.warm_up` -> `SentenceSplitter.__init__` -> `SentenceSplitter._read_abbreviations` -> checks if `site-packages/haystack/data/abbreviations/en.txt` exists (which it doesn't). It looks like this file can be used to specify additional abbreviations on top of the default abbreviations in the sentence tokenizer (see `SentenceSplitter.sentence_tokenizer._params.abbrev_types`).
+2. **Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`.** This message appears if `huggingface-hub`'s version is >= 0.30.0. Adding `hf-xet` to `requirements.txt` causes the Lambda function to fail. See https://huggingface.co/docs/hub/en/storage-backends.
 
 # <u>Vector database collection creation</u>
 
@@ -179,13 +170,6 @@ splitting_options = {
 }
 ```
 
-Lambda function memory and /tmp/ size
-
-permissions
-
-AWS/Docker scripts
-
-
 ## <u>_Lambda function implementation notes_</u>
 
 On cold start,
@@ -203,4 +187,12 @@ On cold start,
 
 **Important note:** The pipeline is created in `lambda_handler` because it may require a keep-alive directive to maintain the OpenAI and Zilliz connections. If the connections can be guaranteed to not be purged by Lambda, then the pipeline can be created outside of `lambda_handler`. See https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html.
 
-# Scripts
+# Bash scripts
+
+* `app/_run_container.sh`: Create a container of the Lambda function and send a test event to test the Lambda function locally
+* `app/_push_image_to_ecr.sh`: Push the Docker image with your Lambda function to ECR
+* `app/_create_s3_bucket.sh`: Create the S3 bucket for triggering your Lambda function
+* `app/_create_lambda_role.sh`: Create the execution role for your Lambda function
+* `app/_create_lambda_function.sh`: Deploy the Lambda function to AWS
+
+The one missing functionality from the scripts is adding the event notification to the S3 bucket. That still needs to be done through the AWS console.
