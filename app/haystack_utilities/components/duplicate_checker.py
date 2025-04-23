@@ -21,7 +21,7 @@ class DuplicateChecker:
             res = self.document_store.client.get(
                 collection_name=self.document_store.collection_name,
                 ids=[doc.id for doc in documents],
-                output_fields = ["*"]
+                output_fields = ["id"]
             )
 
             if len(res) > 0:

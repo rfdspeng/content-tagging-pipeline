@@ -6,8 +6,8 @@ set -e
 # ECR_LINK = <account-id>.dkr.ecr.<region>.amazonaws.com
 source .env
 AWS_PROFILE_NAME=beamdata # If Beam Data credentials are not your default profile
-IMAGE_NAME="content-tagging-lms:v6"
-ECR_REPO="content-tagging/content-tagging-lms:v6" # ECR namespace and repo name
+IMAGE_NAME="content-tagging-lms:v7" # Local image name
+ECR_REPO="content-tagging/content-tagging-lms:v7" # ECR namespace and repo name
 
 aws ecr get-login-password --profile $AWS_PROFILE_NAME --region $AWS_REGION | sudo docker login --username AWS --password-stdin $ECR_LINK
 

@@ -62,11 +62,11 @@ def load_env_vars():
         "temperature": float(os.environ.get("TAGGING_TEMPERATURE", 0)),
         "max_completion_tokens": int(os.environ.get("TAGGING_MAX_TOKENS", 30)),
         "tag_threshold": float(os.environ.get("TAG_THRESHOLD", 0.3)),
-        "untagged_option": os.environ.get("UNTAGGED_OPTION", "keep"),
+        "untagged_option": os.environ.get("UNTAGGED_OPTION", "keep").lower(),
     }
     tagging_kwargs = TaggingKwargs(**tagging_kwargs)
     
-    deduplicate_option = DeduplicateOption(deduplicate_option=os.environ.get("DEDUPLICATE_OPTION", "delete"))
+    deduplicate_option = DeduplicateOption(deduplicate_option=os.environ.get("DEDUPLICATE_OPTION", "delete").lower())
 
     env_vars = {
         "collection_name": collection_name,

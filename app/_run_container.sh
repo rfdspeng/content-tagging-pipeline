@@ -5,7 +5,7 @@ set -e
 
 # Set environment variables
 source .env # API keys and other sensitive variables
-IMAGE_NAME=content-tagging-lms:v6
+IMAGE_NAME=content-tagging-lms:v7
 COLLECTION_NAME=ryan_test_collection
 
 # <<< Optional parameters >>>
