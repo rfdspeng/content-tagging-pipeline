@@ -39,6 +39,7 @@ I'll go over my process, design choices, and issues. For more information, see t
 * **Prompt engineering with few-shot prompting**
     * `{Desired tag}:{list of example topics}`, e.g. `"Machine Learning Engineering: AI, Generative AI, Natural Language Processing, Large Language Models, Computer Vision, MLOps"`, was not effective for tagging.
     * `{List of example topics in "conversational" language}:{desired tags}`, e.g. `Anything related to information retrieval and search engines: ["Data Science", "Machine Learning Engineering"]`, was much more effective for tagging.
+    * Indicating that the content is from a Jupyter notebook improved notebook tagging performance. See _Tagging_ section for more information.
     * See `app/haystack_utilities/ml/tagging_prompts.py`
 * **Tag averaging:** To filter out tagging noise and improve recall, I implemented a "tag averaging" algorithm - for each file, keep all tags that appear in >= X% of the chunks (X is configurable). Re-tag all chunks with the qualifying tags.
 * **Labeling:** The "training" data for prompt engineering was unlabeled. To label the training files, I used a mix of manual and LLM labeling - (1) guess the labels, (2) compare the labels against the LLM tags, (3) update the labels.
